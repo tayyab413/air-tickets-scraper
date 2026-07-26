@@ -19,6 +19,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,6 +63,28 @@ class FlightOut(BaseModel):
     is_cheapest: bool
 
 
+# ── Timezone helpers ──────────────────────────────────────
+_TZ_CACHE = {}
+
+def _tz_abbr(iana_name: str, ref_date: str = None) -> str:
+    if not iana_name:
+        return ""
+    key = (iana_name, ref_date or "today")
+    if key in _TZ_CACHE:
+        return _TZ_CACHE[key]
+    try:
+        tz = ZoneInfo(iana_name)
+        if ref_date:
+            dt = datetime.strptime(ref_date, "%Y-%m-%d").replace(tzinfo=tz)
+        else:
+            dt = datetime.now(tz=tz)
+        abbr = dt.tzname() or ""
+    except Exception:
+        abbr = ""
+    _TZ_CACHE[key] = abbr
+    return abbr
+
+
 # ── CSV Reader ────────────────────────────────────────────
 def load_flights_from_csv(filepath=None) -> list[dict]:
     """Load flight data from the CSV file and return as list of dicts."""
@@ -92,6 +115,9 @@ def load_flights_from_csv(filepath=None) -> list[dict]:
                     row["stops"] = int(row.get("stops", 0))
                 except ValueError:
                     row["stops"] = 0
+                ref = row.get("search_date") or row.get("date", "")
+                row["departure_tz_abbr"] = _tz_abbr(row.get("departure_timezone", ""), ref)
+                row["arrival_tz_abbr"] = _tz_abbr(row.get("arrival_timezone", ""), ref)
                 rows.append(row)
     except Exception:
         return []

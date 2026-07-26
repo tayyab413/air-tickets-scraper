@@ -170,8 +170,8 @@ export default function Dashboard() {
                 <th style={styles.th}>Source</th>
                 <th style={styles.th}>Airline</th>
                 <th style={styles.th}>Flight</th>
-                <th style={styles.th}>Dep</th>
-                <th style={styles.th}>Arr</th>
+                <th style={styles.th}>Departure</th>
+                <th style={styles.th}>Arrival</th>
                 <th style={styles.th}>Stops</th>
                 <th style={styles.th}>Price</th>
                 <th style={styles.th}>Converted</th>
@@ -185,8 +185,8 @@ export default function Dashboard() {
                   <td style={styles.td}>{f.source_name}</td>
                   <td style={styles.td}>{f.airline}</td>
                   <td style={styles.td}>{f.flight_number}</td>
-                  <td style={styles.td}>{f.departure_time || '-'}</td>
-                  <td style={styles.td}>{f.arrival_time || '-'}</td>
+                  <td style={styles.td}>{f.departure_time ? `${f.departure_time} ${f.departure_tz_abbr || ''}` : '-'}</td>
+                  <td style={styles.td}>{f.arrival_time ? `${f.arrival_time} ${f.arrival_tz_abbr || ''}` : '-'}</td>
                   <td style={styles.td}>{f.stops}</td>
                   <td style={styles.td}>
                     {formatPrice(f.original_price, f.original_currency)}
