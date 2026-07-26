@@ -4,7 +4,25 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 function formatPrice(price, currency) {
   const sym = { EUR: '\u20AC', GBP: '\u00A3', USD: '$' }
-  return `${sym[currency] || currency} ${Number(price).toFixed(2)}`
+  return `${sym[currency] || currency}${Number(price).toFixed(2)}`
+}
+
+function Spinner() {
+  return (
+    <div style={spinnerWrap}>
+      <div style={spinner} />
+    </div>
+  )
+}
+
+const spinnerWrap = {
+  display: 'flex', justifyContent: 'center', alignItems: 'center',
+  minHeight: 300,
+}
+const spinner = {
+  width: 40, height: 40, border: '4px solid #e0e0e0',
+  borderTop: '4px solid #2563eb', borderRadius: '50%',
+  animation: 'spin 0.8s linear infinite',
 }
 
 export default function Dashboard() {
@@ -16,7 +34,6 @@ export default function Dashboard() {
   const [error, setError] = useState(null)
   const [searching, setSearching] = useState(false)
 
-  // Search form state
   const [origin, setOrigin] = useState('MAN')
   const [destination, setDestination] = useState('FRA')
   const [searchDate, setSearchDate] = useState('2026-08-15')
@@ -58,7 +75,6 @@ export default function Dashboard() {
       if (data.status === 'error') {
         setError(data.message)
       } else {
-        // Reload full data after search completes
         await loadData()
       }
     } catch (e) {
@@ -73,133 +89,133 @@ export default function Dashboard() {
     : flights.filter(f => f.source_name === filter)
 
   if (loading) return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Loading flight data...</h2>
+    <div style={s.container}>
+      <div style={s.header}>
+        <h1 style={s.title}>Flight Price Comparison</h1>
+        <p style={s.subtitle}>Loading data from API...</p>
+      </div>
+      <Spinner />
     </div>
   )
 
   if (error && !stats) return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Cannot connect to API</h2>
-      <p style={{ color: '#e74c3c' }}>{error}</p>
-      <p>Make sure the backend is running at <code>{API_BASE}</code></p>
+    <div style={s.container}>
+      <div style={s.header}>
+        <h1 style={s.title}>Cannot Connect</h1>
+        <p style={{ color: '#ef4444' }}>{error}</p>
+        <p style={s.subtitle}>Make sure the backend is running at <code>{API_BASE}</code></p>
+      </div>
     </div>
   )
 
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>Flight Price Comparison</h1>
-        <p style={styles.subtitle}>
-          {stats?.total_flights || 0} flights from {stats?.active_sources || 0} sources
-          {stats?.last_updated ? ` \u00B7 Updated ${stats.last_updated}` : ''}
+    <div style={s.container}>
+      <div style={s.header}>
+        <h1 style={s.title}>Flight Price Comparison</h1>
+        <p style={s.subtitle}>
+          {stats?.total_flights || 0} flights &middot; {stats?.active_sources || 0} sources
+          {stats?.last_updated ? ` \u00B7 Updated ${stats.last_updated} ${stats.server_tz || ''}` : ''}
         </p>
-      </header>
+      </div>
 
-      {/* Search Form */}
-      <form onSubmit={handleSearch} style={styles.searchForm}>
-        <input style={styles.input} type="text" value={origin} onChange={e => setOrigin(e.target.value.toUpperCase())} placeholder="Origin" maxLength={3} />
-        <input style={styles.input} type="text" value={destination} onChange={e => setDestination(e.target.value.toUpperCase())} placeholder="Dest" maxLength={3} />
-        <input style={styles.input} type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} />
-        <select style={styles.input} value={cabin} onChange={e => setCabin(e.target.value)}>
+      <form onSubmit={handleSearch} style={s.searchForm}>
+        <input style={s.input} type="text" value={origin} onChange={e => setOrigin(e.target.value.toUpperCase())} placeholder="Origin" maxLength={3} />
+        <input style={s.input} type="text" value={destination} onChange={e => setDestination(e.target.value.toUpperCase())} placeholder="Dest" maxLength={3} />
+        <input style={s.input} type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} />
+        <select style={s.input} value={cabin} onChange={e => setCabin(e.target.value)}>
           <option value="economy">Economy</option>
           <option value="premium_economy">Premium Economy</option>
           <option value="business">Business</option>
           <option value="first">First</option>
         </select>
-        <button type="submit" style={{ ...styles.searchBtn, opacity: searching ? 0.7 : 1 }} disabled={searching}>
+        <button type="submit" style={{ ...s.searchBtn, opacity: searching ? 0.7 : 1 }} disabled={searching}>
           {searching ? 'Searching...' : 'Search Flights'}
         </button>
       </form>
-      {error && <p style={{ color: '#e74c3c', textAlign: 'center', margin: '10px 0' }}>{error}</p>}
+      {error && <p style={{ color: '#ef4444', textAlign: 'center', margin: '0 0 16px', fontSize: 14 }}>{error}</p>}
 
-      {/* Stats Cards */}
-      <div style={styles.statsGrid}>
-        <div style={styles.statCard}>
-          <span style={styles.statValue}>{stats?.total_flights || 0}</span>
-          <span style={styles.statLabel}>Total Flights</span>
+      <div style={s.statsGrid}>
+        <div style={s.statCard}>
+          <span style={{ ...s.statValue, color: '#2563eb' }}>{stats?.total_flights || 0}</span>
+          <span style={s.statLabel}>Total Flights</span>
         </div>
-        <div style={styles.statCard}>
-          <span style={styles.statValue}>{stats?.active_sources || 0}</span>
-          <span style={styles.statLabel}>Sources</span>
+        <div style={s.statCard}>
+          <span style={{ ...s.statValue, color: '#7c3aed' }}>{stats?.active_sources || 0}</span>
+          <span style={s.statLabel}>Sources</span>
         </div>
-        <div style={{ ...styles.statCard, border: '2px solid #27ae60' }}>
-          <span style={{ ...styles.statValue, color: '#27ae60' }}>
+        <div style={{ ...s.statCard, border: '2px solid #059669' }}>
+          <span style={{ ...s.statValue, color: '#059669' }}>
             {stats?.cheapest ? formatPrice(stats.cheapest.price, stats.cheapest.currency) : '-'}
           </span>
-          <span style={styles.statLabel}>
+          <span style={s.statLabel}>
             Cheapest {stats?.cheapest?.airline || ''}
           </span>
         </div>
-        <div style={styles.statCard}>
-          <span style={styles.statValue}>
+        <div style={s.statCard}>
+          <span style={{ ...s.statValue, color: '#d97706' }}>
             {stats?.average_price ? formatPrice(stats.average_price, stats.currency) : '-'}
           </span>
-          <span style={styles.statLabel}>Average Price</span>
+          <span style={s.statLabel}>Average Price</span>
         </div>
       </div>
 
-      {/* Source Filter */}
-      <div style={styles.filterBar}>
-        <button
-          onClick={() => setFilter('all')}
-          style={{ ...styles.filterBtn, ...(filter === 'all' ? styles.filterActive : {}) }}
-        >
+      <div style={s.filterBar}>
+        <button onClick={() => setFilter('all')} style={{ ...s.filterBtn, ...(filter === 'all' ? s.filterActive : {}) }}>
           All Sources ({flights.length})
         </button>
         {sources.map(s => (
-          <button
-            key={s.name}
-            onClick={() => setFilter(s.name)}
-            style={{ ...styles.filterBtn, ...(filter === s.name ? styles.filterActive : {}) }}
-          >
+          <button key={s.name} onClick={() => setFilter(s.name)} style={{ ...s.filterBtn, ...(filter === s.name ? s.filterActive : {}) }}>
             {s.name} ({s.flight_count})
           </button>
         ))}
       </div>
 
-      {/* Flight Table */}
       {filtered.length === 0 ? (
-        <p style={{ textAlign: 'center', color: '#888', padding: 40 }}>No flights found.</p>
+        <div style={s.empty}>
+          <p style={{ fontSize: 18, fontWeight: 600, margin: '0 0 4px' }}>No flights found</p>
+          <p style={{ margin: 0, color: '#888' }}>Try a different route, date, or cabin class</p>
+        </div>
       ) : (
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
+        <div style={s.tableWrap}>
+          <table style={s.table}>
             <thead>
               <tr>
-                <th style={styles.th}>#</th>
-                <th style={styles.th}>Source</th>
-                <th style={styles.th}>Airline</th>
-                <th style={styles.th}>Flight</th>
-                <th style={styles.th}>Departure</th>
-                <th style={styles.th}>Arrival</th>
-                <th style={styles.th}>Stops</th>
-                <th style={styles.th}>Price</th>
-                <th style={styles.th}>Converted</th>
-                <th style={styles.th}>Link</th>
+                <th style={s.th}>#</th>
+                <th style={s.th}>Source</th>
+                <th style={s.th}>Airline</th>
+                <th style={s.th}>Flight</th>
+                <th style={s.th}>Departure</th>
+                <th style={s.th}>Arrival</th>
+                <th style={s.th}>Stops</th>
+                <th style={s.th}>Cabin</th>
+                <th style={s.th}>Price</th>
+                <th style={s.th}>EUR</th>
+                <th style={s.th}></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((f, i) => (
-                <tr key={i} style={f.is_cheapest ? styles.cheapestRow : {}}>
-                  <td style={styles.td}>{i + 1}</td>
-                  <td style={styles.td}>{f.source_name}</td>
-                  <td style={styles.td}>{f.airline}</td>
-                  <td style={styles.td}>{f.flight_number}</td>
-                  <td style={styles.td}>{f.departure_time ? `${f.departure_time} ${f.departure_tz_abbr || ''}` : '-'}</td>
-                  <td style={styles.td}>{f.arrival_time ? `${f.arrival_time} ${f.arrival_tz_abbr || ''}` : '-'}</td>
-                  <td style={styles.td}>{f.stops}</td>
-                  <td style={styles.td}>
-                    {formatPrice(f.original_price, f.original_currency)}
+                <tr key={i} style={{ ...s.tr, ...(f.is_cheapest ? s.cheapestRow : {}), ...(i % 2 === 0 ? {} : s.evenRow) }}>
+                  <td style={s.td}>{i + 1}</td>
+                  <td style={s.td}><span style={sourceBadge(f.source_name)}>{f.source_name}</span></td>
+                  <td style={s.td}>{f.airline}</td>
+                  <td style={{ ...s.td, fontFamily: 'monospace' }}>{f.flight_number || '-'}</td>
+                  <td style={s.td}>{f.departure_time ? `${f.departure_time} ${f.departure_tz_abbr || ''}` : '-'}</td>
+                  <td style={s.td}>{f.arrival_time ? `${f.arrival_time} ${f.arrival_tz_abbr || ''}` : '-'}</td>
+                  <td style={s.td}>
+                    <span style={stopsBadge(f.stops)}>
+                      {f.stops === 0 ? 'Direct' : `${f.stops} stop${f.stops > 1 ? 's' : ''}`}
+                    </span>
                   </td>
-                  <td style={{ ...styles.td, fontWeight: f.is_cheapest ? 700 : 400 }}>
+                  <td style={s.td}>{f.cabin_class_original || f.cabin_class}</td>
+                  <td style={s.td}>{formatPrice(f.original_price, f.original_currency)}</td>
+                  <td style={{ ...s.td, fontWeight: f.is_cheapest ? 700 : 400 }}>
                     {formatPrice(f.converted_price_base, f.base_currency)}
-                    {f.is_cheapest && <span style={styles.badge}>CHEAPEST</span>}
+                    {f.is_cheapest && <span style={s.badge}>CHEAPEST</span>}
                   </td>
-                  <td style={styles.td}>
+                  <td style={s.td}>
                     {f.ticket_link ? (
-                      <a href={f.ticket_link} target="_blank" rel="noreferrer" style={styles.link}>
-                        Book
-                      </a>
+                      <a href={f.ticket_link} target="_blank" rel="noreferrer" style={s.link}>Book &rarr;</a>
                     ) : '-'}
                   </td>
                 </tr>
@@ -209,38 +225,114 @@ export default function Dashboard() {
         </div>
       )}
 
-      <footer style={styles.footer}>
+      <div style={s.footer}>
         <a href={`${API_BASE}/api/stats`} target="_blank" rel="noreferrer">API Stats</a>
         {' \u00B7 '}
         <a href={`${API_BASE}/api/sources`} target="_blank" rel="noreferrer">API Sources</a>
         {' \u00B7 '}
         <a href={`${API_BASE}/docs`} target="_blank" rel="noreferrer">API Docs</a>
-      </footer>
+      </div>
+
+      <style>{spinKeyframes}</style>
     </div>
   )
 }
 
-const styles = {
-  container: { maxWidth: 1200, margin: '0 auto', padding: '20px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
-  header: { textAlign: 'center', marginBottom: 20 },
-  title: { fontSize: 28, fontWeight: 700, margin: 0 },
-  subtitle: { color: '#666', fontSize: 14, margin: '5px 0 0' },
-  searchForm: { display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 20, flexWrap: 'wrap' },
-  input: { padding: '8px 12px', borderRadius: 6, border: '1px solid #ddd', fontSize: 14, fontFamily: 'inherit' },
-  searchBtn: { padding: '8px 20px', borderRadius: 6, border: 'none', background: '#3498db', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 600 },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 15, marginBottom: 25 },
-  statCard: { background: '#fff', border: '1px solid #e0e0e0', borderRadius: 10, padding: '20px', textAlign: 'center' },
-  statValue: { fontSize: 24, fontWeight: 700, display: 'block', color: '#2c3e50' },
-  statLabel: { fontSize: 12, color: '#888', marginTop: 5 },
-  filterBar: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  filterBtn: { padding: '6px 14px', borderRadius: 20, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 13 },
-  filterActive: { background: '#3498db', color: '#fff', borderColor: '#3498db' },
-  tableWrap: { overflowX: 'auto', background: '#fff', borderRadius: 10, border: '1px solid #e0e0e0' },
+const spinKeyframes = `
+  @keyframes spin { to { transform: rotate(360deg); } }
+`
+
+function sourceBadge(name) {
+  const colors = {
+    'Ignav API': { bg: '#dbeafe', color: '#1d4ed8' },
+    'Google Flights': { bg: '#d1fae5', color: '#047857' },
+    'WhentoFly': { bg: '#fef3c7', color: '#b45309' },
+    'OctoTrip': { bg: '#ede9fe', color: '#6d28d9' },
+    'Kayak': { bg: '#fce7f3', color: '#be185d' },
+  }
+  const c = colors[name] || { bg: '#f3f4f6', color: '#374151' }
+  return { display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: c.bg, color: c.color }
+}
+
+function stopsBadge(stops) {
+  const color = stops === 0 ? '#059669' : stops === 1 ? '#d97706' : '#dc2626'
+  const bg = stops === 0 ? '#ecfdf5' : stops === 1 ? '#fffbeb' : '#fef2f2'
+  return { display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, color, background: bg }
+}
+
+const s = {
+  container: {
+    maxWidth: 1280, margin: '0 auto', padding: '24px',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+    background: '#f8fafc', minHeight: '100vh',
+  },
+  header: {
+    textAlign: 'center', marginBottom: 24,
+    background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)',
+    margin: '-24px -24px 24px', padding: '32px 24px',
+    color: '#fff',
+  },
+  title: { fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: '-0.5px' },
+  subtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 14, margin: '6px 0 0' },
+  searchForm: {
+    display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 24, flexWrap: 'wrap',
+  },
+  input: {
+    padding: '10px 14px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14,
+    fontFamily: 'inherit', background: '#fff', outline: 'none', transition: 'border-color 0.15s',
+  },
+  searchBtn: {
+    padding: '10px 24px', borderRadius: 8, border: 'none', background: '#2563eb',
+    color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 600,
+    transition: 'background 0.15s',
+  },
+  statsGrid: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: 16, marginBottom: 24,
+  },
+  statCard: {
+    background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12,
+    padding: '20px 16px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+  },
+  statValue: { fontSize: 26, fontWeight: 800, display: 'block' },
+  statLabel: { fontSize: 12, color: '#6b7280', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' },
+  filterBar: {
+    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20,
+    justifyContent: 'center',
+  },
+  filterBtn: {
+    padding: '6px 16px', borderRadius: 20, border: '1px solid #d1d5db',
+    background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+    transition: 'all 0.15s',
+  },
+  filterActive: { background: '#2563eb', color: '#fff', borderColor: '#2563eb' },
+  empty: {
+    textAlign: 'center', padding: '60px 20px', background: '#fff',
+    borderRadius: 12, border: '1px solid #e5e7eb',
+  },
+  tableWrap: {
+    overflowX: 'auto', background: '#fff', borderRadius: 12,
+    border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+  },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
-  th: { padding: '12px 10px', textAlign: 'left', borderBottom: '2px solid #eee', background: '#fafafa', fontWeight: 600, whiteSpace: 'nowrap' },
-  td: { padding: '10px', borderBottom: '1px solid #f0f0f0', whiteSpace: 'nowrap' },
-  cheapestRow: { background: '#f0fff4' },
-  badge: { display: 'inline-block', background: '#27ae60', color: '#fff', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, marginLeft: 6 },
-  link: { color: '#3498db', textDecoration: 'none', fontWeight: 600 },
-  footer: { textAlign: 'center', marginTop: 30, padding: 20, color: '#888', fontSize: 13 },
+  th: {
+    padding: '12px 10px', textAlign: 'left', borderBottom: '2px solid #e5e7eb',
+    background: '#f9fafb', fontWeight: 600, whiteSpace: 'nowrap',
+    color: '#374151', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px',
+  },
+  tr: { transition: 'background 0.1s' },
+  evenRow: { background: '#fafafa' },
+  td: { padding: '10px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' },
+  cheapestRow: { background: '#f0fdf4' },
+  badge: {
+    display: 'inline-block', background: '#059669', color: '#fff',
+    fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+    marginLeft: 6, letterSpacing: '0.3px',
+  },
+  link: {
+    color: '#2563eb', textDecoration: 'none', fontWeight: 600, fontSize: 12,
+  },
+  footer: {
+    textAlign: 'center', marginTop: 32, padding: 20, color: '#9ca3af', fontSize: 13,
+  },
 }

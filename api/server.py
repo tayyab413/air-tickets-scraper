@@ -186,6 +186,12 @@ def get_stats():
     avg_price = sum(prices) / len(prices) if prices else 0
     sources = len(set(f["source_name"] for f in flights))
 
+    # Get server timezone abbreviation
+    try:
+        server_tz = datetime.now().astimezone().tzname() or "UTC"
+    except Exception:
+        server_tz = "UTC"
+
     return {
         "total_flights": len(flights),
         "active_sources": sources,
@@ -198,6 +204,7 @@ def get_stats():
             "source": cheapest["source_name"],
         },
         "last_updated": flights[0].get("search_time", ""),
+        "server_tz": server_tz,
     }
 
 
