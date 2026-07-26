@@ -1,0 +1,9 @@
+# Flight Price Comparison System - Dependencies
+# Install with: pip install -r requirements.txt
+
+requests>=2.28.0         # For calling APIs and fetching exchange rates
+fast-flights>=3.0        # Google Flights Protobuf reverse-engineer
+ryanair-py>=3.0          # Ryanair API wrapper
+playwright>=1.40         # Headless browser for web scraping
+beautifulsoup4>=4.10     # HTML parsing
+lxml>=4.9                # Fast XML/HTML parser

@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+flight_scraper/output/*.csv
+flight_scraper/output/*.tmp
+.env
+*.egg-info/
+dist/
+build/
