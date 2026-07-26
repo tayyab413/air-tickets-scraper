@@ -200,20 +200,9 @@ def run_search(req: SearchRequest):
         return {"status": "error", "message": str(e)}
 
     flights = load_flights_from_csv()
-
-    # Debug: check what files exist
-    import glob as _glob
-    debug_files = _glob.glob(str(SCRAPER_DIR / "output" / "*"))
-    debug_files += _glob.glob(str(BASE_DIR / "output" / "*"))
-
     return {
         "status": "success",
         "flights_count": len(flights),
-        "cwd": os.getcwd(),
-        "scraper_dir": str(SCRAPER_DIR),
-        "csv_file": str(CSV_FILE),
-        "csv_exists": CSV_FILE.exists(),
-        "debug_files": debug_files,
         "log": output[-2000:],
         "flights": flights[:50],
     }
