@@ -1115,6 +1115,11 @@ class IgnavSource(BaseSource):
                     # Ignav returns cabin class in the itinerary
                     itin_cabin = itin.get("cabin_class", cabin_class)
 
+                    # Filter: when searching economy, only include economy results
+                    if cabin_class == "economy" and itin_cabin != "economy":
+                        print(f"  [DEBUG] Ignav: Skipping non-economy itinerary ({itin_cabin})")
+                        continue
+
                     # Booking link (Ignav uses a separate endpoint, but we store the ID)
                     ignav_id = itin.get("ignav_id", "")
 
@@ -1639,6 +1644,10 @@ class RyanairSource(BaseSource):
         self.source_name = "Ryanair"
 
     def search(self, origin, destination, date, cabin_class, currency_converter):
+        if cabin_class != "economy":
+            print(f"  [INFO] {self.source_name}: Only economy class available, skipping non-economy search")
+            return []
+
         try:
             import requests
 
@@ -1771,6 +1780,10 @@ class KayakScraper(BaseSource):
         self.source_name = "Kayak"
 
     def search(self, origin, destination, date, cabin_class, currency_converter):
+        if cabin_class != "economy":
+            print(f"  [INFO] {self.source_name}: Cabin filtering not supported, skipping non-economy search")
+            return []
+
         try:
             from playwright.sync_api import sync_playwright
             import re
@@ -2013,6 +2026,10 @@ class OctoTripSource(BaseSource):
         self.source_name = "OctoTrip"
 
     def search(self, origin, destination, date, cabin_class, currency_converter):
+        if cabin_class != "economy":
+            print(f"  [INFO] {self.source_name}: Cabin filtering not supported, skipping non-economy search")
+            return []
+
         try:
             import requests, json, time
 
