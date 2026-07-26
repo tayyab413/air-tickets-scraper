@@ -2,6 +2,6 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "cd flight_scraper && pip install -r ../api/requirements.txt && playwright install chromium && cd .. && python -m uvicorn api.server:app --host 0.0.0.0 --port $PORT"
+startCommand = "playwright install chromium && python -m uvicorn api.server:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
