@@ -26,6 +26,7 @@ HOW TO CUSTOMIZE:
 
 import sys
 import os
+import argparse
 
 # Add the flight_scraper folder to Python's path
 # This ensures all imports work correctly
@@ -113,6 +114,15 @@ def get_user_input():
     )
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Flight Price Comparison System")
+    parser.add_argument("--origin", default=None, help="Origin airport code (e.g. MAN)")
+    parser.add_argument("--dest", default=None, help="Destination airport code (e.g. FRA)")
+    parser.add_argument("--date", default=None, help="Travel date (YYYY-MM-DD)")
+    parser.add_argument("--cabin", default=None, help="Cabin class (economy/premium_economy/business/first)")
+    return parser.parse_args()
+
+
 def main():
     """
     Main program flow:
@@ -125,8 +135,16 @@ def main():
     6. Write results to CSV
     7. Show summary
     """
-    # STEP 1: Get what the user wants to search
-    origin, destination, date, cabin_class = get_user_input()
+    # STEP 0: Check for CLI args (used by API server)
+    args = parse_args()
+    if args.origin or args.dest or args.date or args.cabin:
+        origin = (args.origin or config.DEFAULT_ORIGIN).upper()
+        destination = (args.dest or config.DEFAULT_DESTINATION).upper()
+        date = args.date or config.DEFAULT_DATE
+        cabin_class = (args.cabin or config.DEFAULT_CABIN).lower()
+    else:
+        # STEP 1: Get what the user wants to search
+        origin, destination, date, cabin_class = get_user_input()
 
     # STEP 2: Set up the currency converter
     # This will try to get live exchange rates, or use fallback

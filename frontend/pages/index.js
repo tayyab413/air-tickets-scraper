@@ -14,29 +14,59 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [searching, setSearching] = useState(false)
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [fRes, sRes, srcRes] = await Promise.all([
-          fetch(`${API_BASE}/api/flights`),
-          fetch(`${API_BASE}/api/stats`),
-          fetch(`${API_BASE}/api/sources`),
-        ])
-        const fData = await fRes.json()
-        const sData = await sRes.json()
-        const srcData = await srcRes.json()
-        setFlights(fData.flights || [])
-        setStats(sData)
-        setSources(srcData.sources || [])
-      } catch (e) {
-        setError(e.message)
-      } finally {
-        setLoading(false)
-      }
+  // Search form state
+  const [origin, setOrigin] = useState('MAN')
+  const [destination, setDestination] = useState('FRA')
+  const [searchDate, setSearchDate] = useState('2026-08-15')
+  const [cabin, setCabin] = useState('economy')
+
+  async function loadData() {
+    try {
+      const [fRes, sRes, srcRes] = await Promise.all([
+        fetch(`${API_BASE}/api/flights`),
+        fetch(`${API_BASE}/api/stats`),
+        fetch(`${API_BASE}/api/sources`),
+      ])
+      const fData = await fRes.json()
+      const sData = await sRes.json()
+      const srcData = await srcRes.json()
+      setFlights(fData.flights || [])
+      setStats(sData)
+      setSources(srcData.sources || [])
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
     }
-    fetchData()
-  }, [])
+  }
+
+  useEffect(() => { loadData() }, [])
+
+  async function handleSearch(e) {
+    e.preventDefault()
+    setSearching(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origin, destination, date: searchDate, cabin_class: cabin }),
+      })
+      const data = await res.json()
+      if (data.status === 'error') {
+        setError(data.message)
+      } else {
+        // Reload full data after search completes
+        await loadData()
+      }
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSearching(false)
+    }
+  }
 
   const filtered = filter === 'all'
     ? flights
@@ -48,7 +78,7 @@ export default function Dashboard() {
     </div>
   )
 
-  if (error) return (
+  if (error && !stats) return (
     <div style={styles.container}>
       <h2 style={styles.title}>Cannot connect to API</h2>
       <p style={{ color: '#e74c3c' }}>{error}</p>
@@ -65,6 +95,23 @@ export default function Dashboard() {
           {stats?.last_updated ? ` \u00B7 Updated ${stats.last_updated}` : ''}
         </p>
       </header>
+
+      {/* Search Form */}
+      <form onSubmit={handleSearch} style={styles.searchForm}>
+        <input style={styles.input} type="text" value={origin} onChange={e => setOrigin(e.target.value.toUpperCase())} placeholder="Origin" maxLength={3} />
+        <input style={styles.input} type="text" value={destination} onChange={e => setDestination(e.target.value.toUpperCase())} placeholder="Dest" maxLength={3} />
+        <input style={styles.input} type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} />
+        <select style={styles.input} value={cabin} onChange={e => setCabin(e.target.value)}>
+          <option value="economy">Economy</option>
+          <option value="premium_economy">Premium Economy</option>
+          <option value="business">Business</option>
+          <option value="first">First</option>
+        </select>
+        <button type="submit" style={{ ...styles.searchBtn, opacity: searching ? 0.7 : 1 }} disabled={searching}>
+          {searching ? 'Searching...' : 'Search Flights'}
+        </button>
+      </form>
+      {error && <p style={{ color: '#e74c3c', textAlign: 'center', margin: '10px 0' }}>{error}</p>}
 
       {/* Stats Cards */}
       <div style={styles.statsGrid}>
@@ -175,9 +222,12 @@ export default function Dashboard() {
 
 const styles = {
   container: { maxWidth: 1200, margin: '0 auto', padding: '20px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
-  header: { textAlign: 'center', marginBottom: 30 },
+  header: { textAlign: 'center', marginBottom: 20 },
   title: { fontSize: 28, fontWeight: 700, margin: 0 },
   subtitle: { color: '#666', fontSize: 14, margin: '5px 0 0' },
+  searchForm: { display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 20, flexWrap: 'wrap' },
+  input: { padding: '8px 12px', borderRadius: 6, border: '1px solid #ddd', fontSize: 14, fontFamily: 'inherit' },
+  searchBtn: { padding: '8px 20px', borderRadius: 6, border: 'none', background: '#3498db', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 600 },
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 15, marginBottom: 25 },
   statCard: { background: '#fff', border: '1px solid #e0e0e0', borderRadius: 10, padding: '20px', textAlign: 'center' },
   statValue: { fontSize: 24, fontWeight: 700, display: 'block', color: '#2c3e50' },

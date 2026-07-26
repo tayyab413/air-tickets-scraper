@@ -30,6 +30,10 @@ SCRAPER_DIR = BASE_DIR / "flight_scraper"
 CSV_DIR = SCRAPER_DIR / "output"
 CSV_FILE = CSV_DIR / "flights_latest.csv"
 
+# Load scraper config for defaults
+sys.path.insert(0, str(SCRAPER_DIR))
+import config
+
 # ── Models ────────────────────────────────────────────────
 class SearchRequest(BaseModel):
     origin: str = "MAN"
@@ -62,10 +66,7 @@ class FlightOut(BaseModel):
 def load_flights_from_csv(filepath=None) -> list[dict]:
     """Load flight data from the CSV file and return as list of dicts."""
     path = filepath or CSV_FILE
-    if not os.path.exists(path):
-        return []
-
-    # Try to find the latest CSV if main one doesn't exist
+    # Try to find the latest CSV
     if not path.exists():
         backups = sorted(CSV_DIR.glob("flights_latest_*.csv"), reverse=True)
         if backups:
@@ -177,14 +178,15 @@ def get_stats():
 @app.post("/api/search")
 def run_search(req: SearchRequest):
     """Trigger a new search and return the results."""
-    date = req.date or datetime.now().strftime("%Y-%m-%d")
+    cmd = [sys.executable, str(SCRAPER_DIR / "main.py")]
+    cmd += ["--origin", req.origin or config.DEFAULT_ORIGIN]
+    cmd += ["--dest", req.destination or config.DEFAULT_DESTINATION]
+    cmd += ["--date", req.date or config.DEFAULT_DATE]
+    cmd += ["--cabin", req.cabin_class or config.DEFAULT_CABIN]
 
     try:
         result = subprocess.run(
-            [
-                sys.executable,
-                str(SCRAPER_DIR / "main.py"),
-            ],
+            cmd,
             capture_output=True,
             text=True,
             timeout=180,
