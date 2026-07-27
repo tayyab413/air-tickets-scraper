@@ -128,8 +128,13 @@ def load_flights_from_csv(filepath=None) -> list[dict]:
 # ── App Lifecycle ─────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup — clear any stale CSV so page loads empty
     os.makedirs(CSV_DIR, exist_ok=True)
+    for f in CSV_DIR.glob("flights_latest*"):
+        try:
+            f.unlink()
+        except Exception:
+            pass
     yield
     # Shutdown
 

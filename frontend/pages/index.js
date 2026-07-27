@@ -30,7 +30,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [sources, setSources] = useState([])
   const [filter, setFilter] = useState('all')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [searching, setSearching] = useState(false)
 
@@ -38,6 +38,9 @@ export default function Dashboard() {
   const [destination, setDestination] = useState('FRA')
   const [searchDate, setSearchDate] = useState('2026-08-15')
   const [cabin, setCabin] = useState('economy')
+
+  // Start empty — no data on page load
+  useEffect(() => { setLoading(false) }, [])
 
   async function loadData() {
     try {
@@ -58,8 +61,6 @@ export default function Dashboard() {
       setLoading(false)
     }
   }
-
-  useEffect(() => { loadData() }, [])
 
   async function handleSearch(e) {
     e.preventDefault()
