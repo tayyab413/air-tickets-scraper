@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -7,30 +7,11 @@ function formatPrice(price, currency) {
   return `${sym[currency] || currency}${Number(price).toFixed(2)}`
 }
 
-function Spinner() {
-  return (
-    <div style={spinnerWrap}>
-      <div style={spinner} />
-    </div>
-  )
-}
-
-const spinnerWrap = {
-  display: 'flex', justifyContent: 'center', alignItems: 'center',
-  minHeight: 300,
-}
-const spinner = {
-  width: 40, height: 40, border: '4px solid #e0e0e0',
-  borderTop: '4px solid #2563eb', borderRadius: '50%',
-  animation: 'spin 0.8s linear infinite',
-}
-
 export default function Dashboard() {
   const [flights, setFlights] = useState([])
   const [stats, setStats] = useState(null)
   const [sources, setSources] = useState([])
   const [filter, setFilter] = useState('all')
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [searching, setSearching] = useState(false)
 
@@ -38,9 +19,7 @@ export default function Dashboard() {
   const [destination, setDestination] = useState('FRA')
   const [searchDate, setSearchDate] = useState('2026-08-15')
   const [cabin, setCabin] = useState('economy')
-
-  // Start empty — no data on page load
-  useEffect(() => { setLoading(false) }, [])
+  // Start empty — no initial data load
 
   async function loadData() {
     try {
@@ -57,8 +36,6 @@ export default function Dashboard() {
       setSources(srcData.sources || [])
     } catch (e) {
       setError(e.message)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -88,16 +65,6 @@ export default function Dashboard() {
   const filtered = filter === 'all'
     ? flights
     : flights.filter(f => f.source_name === filter)
-
-  if (loading) return (
-    <div style={s.container}>
-      <div style={s.header}>
-        <h1 style={s.title}>Flight Price Comparison</h1>
-        <p style={s.subtitle}>Loading data from API...</p>
-      </div>
-      <Spinner />
-    </div>
-  )
 
   if (error && !stats) return (
     <div style={s.container}>
@@ -234,14 +201,9 @@ export default function Dashboard() {
         <a href={`${API_BASE}/docs`} target="_blank" rel="noreferrer">API Docs</a>
       </div>
 
-      <style>{spinKeyframes}</style>
     </div>
   )
 }
-
-const spinKeyframes = `
-  @keyframes spin { to { transform: rotate(360deg); } }
-`
 
 function sourceBadge(name) {
   const colors = {
