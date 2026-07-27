@@ -35,13 +35,9 @@ CSV_FILE = CSV_DIR / "flights_latest.csv"
 sys.path.insert(0, str(SCRAPER_DIR))
 import config
 
-# Clear stale CSV on every server start
-os.makedirs(str(CSV_DIR), exist_ok=True)
-for f in Path(CSV_DIR).glob("flights_latest*"):
-    try:
-        f.unlink()
-    except Exception:
-        pass
+# In-memory flag — resets on every server start
+# No data shown until a fresh search is performed
+_has_searched = False
 
 # ── Models ────────────────────────────────────────────────
 class SearchRequest(BaseModel):
@@ -96,6 +92,10 @@ def _tz_abbr(iana_name: str, ref_date: str = None) -> str:
 # ── CSV Reader ────────────────────────────────────────────
 def load_flights_from_csv(filepath=None) -> list[dict]:
     """Load flight data from the CSV file and return as list of dicts."""
+    global _has_searched
+    if not _has_searched:
+        return []
+
     path = filepath or CSV_FILE
     # Try to find the latest CSV
     if not path.exists():
@@ -238,6 +238,8 @@ def run_search(req: SearchRequest):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+    global _has_searched
+    _has_searched = True
     flights = load_flights_from_csv()
     return {
         "status": "success",
