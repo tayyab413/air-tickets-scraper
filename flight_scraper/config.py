@@ -11,13 +11,14 @@ HOW TO USE:
 """
 
 import os
+from datetime import datetime
 
 # ============================================================
 # ROUTE SETTINGS - Change these to search different routes
 # ============================================================
 DEFAULT_ORIGIN = "MAN"           # Departure airport (IATA code, e.g., "MAN" for Manchester)
 DEFAULT_DESTINATION = "FRA"      # Arrival airport (IATA code, e.g., "FRA" for Frankfurt)
-DEFAULT_DATE = "2026-08-15"      # Search date in YYYY-MM-DD format (must be in the future)
+DEFAULT_DATE = datetime.now().strftime("%Y-%m-%d")  # Defaults to today's date (computed at import time)
 DEFAULT_CABIN = "economy"        # Options: economy, premium_economy, business, first
 
 # ============================================================

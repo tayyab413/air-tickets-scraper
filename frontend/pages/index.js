@@ -17,7 +17,7 @@ export default function Dashboard() {
 
   const [origin, setOrigin] = useState('MAN')
   const [destination, setDestination] = useState('FRA')
-  const [searchDate, setSearchDate] = useState('2026-08-15')
+  const [searchDate, setSearchDate] = useState(new Date().toISOString().split('T')[0])
   const [cabin, setCabin] = useState('economy')
   // Start empty — no initial data load
 

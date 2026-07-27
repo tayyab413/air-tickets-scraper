@@ -1120,8 +1120,26 @@ class IgnavSource(BaseSource):
                         print(f"  [DEBUG] Ignav: Skipping non-economy itinerary ({itin_cabin})")
                         continue
 
-                    # Booking link (Ignav uses a separate endpoint, but we store the ID)
+                    # Booking link: call Ignav booking-links API to get real URLs
                     ignav_id = itin.get("ignav_id", "")
+                    ticket_link = ""
+                    if ignav_id:
+                        try:
+                            bl_response = requests.post(
+                                "https://ignav.com/api/fares/booking-links",
+                                json={"ignav_id": ignav_id},
+                                headers=headers,
+                                timeout=10,
+                            )
+                            if bl_response.status_code == 200:
+                                bl_data = bl_response.json()
+                                opts = bl_data.get("booking_options", [])
+                                if opts:
+                                    links = opts[0].get("links", [])
+                                    if links:
+                                        ticket_link = links[0].get("url", "")
+                        except Exception:
+                            pass
 
                     dep_tz_info = get_airport_timezone(origin)
                     arr_tz_info = get_airport_timezone(destination)
@@ -1145,7 +1163,7 @@ class IgnavSource(BaseSource):
                         base_currency=cfg.BASE_CURRENCY,
                         exchange_rate_used=used_rate,
                         converted_price_base=converted_price,
-                        ticket_link=f"https://ignav.com/book/{ignav_id}" if ignav_id else "",
+                        ticket_link=ticket_link,
                         baggage_info="Check airline",
                         fare_rules=itin.get("price", {}).get("status", "Standard fare"),
                         search_time="",
@@ -1808,17 +1826,33 @@ class KayakScraper(BaseSource):
                 page.goto(url, timeout=30000, wait_until="domcontentloaded")
                 page.wait_for_timeout(8000)
 
+                # Try clicking "Load more" / "Show more" buttons to get additional results
+                for attempt in range(3):
+                    try:
+                        load_more = page.query_selector('[data-testid="show-more"]')
+                        if not load_more:
+                            load_more = page.query_selector('button:has-text("Show more")')
+                        if not load_more:
+                            load_more = page.query_selector('button:has-text("Load more")')
+                        if not load_more:
+                            load_more = page.query_selector('.moreButton')
+                        if not load_more:
+                            break
+                        load_more.click()
+                        page.wait_for_timeout(3000)
+                        print(f"  [SCRAPE] {self.source_name}: Clicked 'Load more' (attempt {attempt+1})")
+                    except Exception:
+                        break
+
                 body_text = page.inner_text("body")
                 lines = body_text.split("\n")
 
                 # Extract GBP prices from page
-                import json as _json
                 price_data = []
                 for line in lines:
                     line = line.strip()
                     if not line:
                         continue
-                    # Match prices like "£138" or "€208"
                     price_match = re.search(r'[£€\$]([\d,]+)', line)
                     if price_match:
                         try:
@@ -1829,15 +1863,17 @@ class KayakScraper(BaseSource):
 
                 browser.close()
 
+            # Deduplicate by rounding price to nearest integer (handles minor variations)
             results = []
-            seen_prices = set()
+            seen_keys = set()
             for pd in price_data:
                 price_gbp = pd["price_gbp"]
-                if price_gbp <= 0 or price_gbp in seen_prices:
+                if price_gbp <= 0 or price_gbp > 5000:
                     continue
-                if price_gbp > 5000:
+                dedup_key = round(price_gbp)
+                if dedup_key in seen_keys:
                     continue
-                seen_prices.add(price_gbp)
+                seen_keys.add(dedup_key)
 
                 converted_price, used_rate = currency_converter.convert(price_gbp, "GBP")
                 dep_tz_info = get_airport_timezone(origin)
@@ -1873,7 +1909,7 @@ class KayakScraper(BaseSource):
 
             print(f"  [SCRAPE] {self.source_name}: Extracted {len(results)} prices from page")
             if results:
-                return results[:10]
+                return results[:15]
 
             print(f"  [INFO] {self.source_name}: Kayak data not extractable")
             return []
@@ -2156,10 +2192,56 @@ class OctoTripSource(BaseSource):
             return []
 
 
+_AIRLINE_CODES = {
+    "AA": "American Airlines", "AF": "Air France", "AM": "Aeromexico",
+    "AY": "Finnair", "AZ": "IT Airways", "BA": "British Airways",
+    "BR": "EVA Air", "CA": "Air China", "CI": "China Airlines",
+    "CZ": "China Southern", "DL": "Delta Air Lines", "EK": "Emirates",
+    "EN": "Air Dolomiti", "ET": "Ethiopian Airlines", "EY": "Etihad",
+    "FZ": "flydubai", "GA": "Garuda Indonesia", "HU": "Hainan Airlines",
+    "IB": "Iberia", "JL": "Japan Airlines", "KL": "KLM",
+    "KQ": "Kenya Airways", "KU": "Kuwait Airways", "LA": "LATAM",
+    "LH": "Lufthansa", "LO": "LOT Polish", "LX": "Swiss",
+    "LY": "El Al", "MH": "Malaysia Airlines", "MS": "EgyptAir",
+    "MU": "China Eastern", "NH": "ANA", "NX": "Air Macau",
+    "OS": "Austrian", "OZ": "Asiana", "PC": "Pegasus",
+    "QR": "Qatar Airways", "RJ": "Royal Jordanian", "RO": "Tarom",
+    "SA": "SAA", "SC": "Shandong Airlines", "SK": "SAS",
+    "SN": "Brussels Airlines", "SQ": "Singapore Airlines",
+    "SU": "Aeroflot", "SV": "Saudia", "TG": "Thai Airways",
+    "TK": "Turkish Airlines", "TP": "TAP Air Portugal",
+    "TU": "Tunisair", "UA": "United Airlines", "UK": "Vistara",
+    "UL": "SriLankan", "VN": "Vietnam Airlines", "VS": "Virgin Atlantic",
+    "VY": "Vueling", "W6": "Wizz Air", "WY": "Oman Air",
+    "CA": "Air China", "CX": "Cathay Pacific",
+    "EI": "Aer Lingus", "EW": "Eurowings",
+    "FR": "Ryanair", "GF": "Gulf Air",
+    "HM": "Air Seychelles", "HY": "Uzbekistan Airways",
+    "IR": "Iran Air", "IZ": "Arkia",
+    "JP": "Adria Airways", "KC": "Air Astana",
+    "KE": "Korean Air", "LT": "LATAM",
+    "MK": "Air Mauritius", "MO": "Calm Air",
+    "NF": "Air Vanuatu", "NZ": "Air New Zealand",
+    "OU": "Croatia Airlines", "PK": "Pakistan Intl",
+    "PR": "Philippine Airlines", "PS": "Ukraine Intl",
+    "PT": "WestJet", "PW": "Precision Air",
+    "PX": "Air Niugini", "QF": "Qantas",
+    "QR": "Qatar Airways", "RA": "Nepal Airlines",
+    "RB": "Syrian Arab", "SB": "Aircalin",
+    "S7": "S7 Airlines", "SM": "Air Cairo",
+    "TB": "TUI fly Belgium", "TK": "Turkish Airlines",
+    "T5": "Turkmenistan", "U6": "Ural Airlines",
+    "UU": "Air Austral", "W5": "Mahan Air",
+    "WB": "RwandAir", "XQ": "SunExpress",
+    "ZB": "Monarch", "ZF": "Air Sial",
+}
+
+
 class WhentoFlySource(BaseSource):
     """
     WhentoFly.io - Free flight search API, no signup required.
     Returns real-time pricing from multiple providers (Aviasales, etc.).
+    Note: This API does NOT return flight numbers, departure times, or arrival times.
     """
 
     def __init__(self):
@@ -2202,7 +2284,8 @@ class WhentoFlySource(BaseSource):
                     if amount <= 0:
                         continue
 
-                    airline = item.get("airline", "Unknown")
+                    airline_code = item.get("airline", "")
+                    airline = _AIRLINE_CODES.get(airline_code, airline_code or "Unknown")
                     transfers = item.get("transfers", 0)
                     book_url = item.get("book_url", "")
 
