@@ -35,6 +35,14 @@ CSV_FILE = CSV_DIR / "flights_latest.csv"
 sys.path.insert(0, str(SCRAPER_DIR))
 import config
 
+# Clear stale CSV on every server start
+os.makedirs(str(CSV_DIR), exist_ok=True)
+for f in Path(CSV_DIR).glob("flights_latest*"):
+    try:
+        f.unlink()
+    except Exception:
+        pass
+
 # ── Models ────────────────────────────────────────────────
 class SearchRequest(BaseModel):
     origin: str = "MAN"
@@ -128,13 +136,6 @@ def load_flights_from_csv(filepath=None) -> list[dict]:
 # ── App Lifecycle ─────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup — clear any stale CSV so page loads empty
-    os.makedirs(CSV_DIR, exist_ok=True)
-    for f in CSV_DIR.glob("flights_latest*"):
-        try:
-            f.unlink()
-        except Exception:
-            pass
     yield
     # Shutdown
 
