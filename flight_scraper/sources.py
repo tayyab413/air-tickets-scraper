@@ -2520,6 +2520,14 @@ class SourceManager:
                 print(f"  [ERROR] {error_msg}")
                 print(f"  [ERROR] Continuing with other sources...")
 
+        # Post-process: enrich WhentoFly results with flight details from detailed sources
+        self._enrich_whentofly()
+
+        enriched = sum(1 for f in self.results if f.source_name == "WhentoFly" and f.flight_number)
+        whentofly_total = sum(1 for f in self.results if f.source_name == "WhentoFly")
+        if whentofly_total > 0:
+            print(f"  [ENRICH] WhentoFly: {enriched}/{whentofly_total} flights enriched with details from other sources")
+
         print(f"\n{'='*60}")
         print(f"  SEARCH COMPLETE")
         print(f"  Successful: {len(self.results)} flights from "
@@ -2534,3 +2542,44 @@ class SourceManager:
             print()
 
         return self.results
+
+    def _enrich_whentofly(self):
+        """Fill flight_number, departure_time, arrival_time for WhentoFly results
+        by matching against detailed sources (Ignav, Google Flights, OctoTrip)."""
+        detailed = [f for f in self.results if f.source_name in ("Ignav API", "Google Flights", "OctoTrip")]
+        if not detailed:
+            return
+
+        for flight in self.results:
+            if flight.source_name != "WhentoFly":
+                continue
+            if flight.flight_number or flight.departure_time:
+                continue
+
+            best = None
+            best_score = 0
+            for cand in detailed:
+                # Same route
+                if cand.origin != flight.origin or cand.destination != flight.destination:
+                    continue
+                # Same airline
+                if cand.airline != flight.airline:
+                    continue
+                # Same number of stops
+                if cand.stops != flight.stops:
+                    continue
+                # Price similarity (within 40%)
+                if flight.converted_price_base > 0 and cand.converted_price_base > 0:
+                    ratio = cand.converted_price_base / flight.converted_price_base
+                    if ratio < 0.6 or ratio > 1.4:
+                        continue
+                score = 100 - abs(1 - (cand.converted_price_base / max(flight.converted_price_base, 0.01))) * 50
+                if score > best_score:
+                    best_score = score
+                    best = cand
+
+            if best:
+                flight.flight_number = best.flight_number
+                flight.departure_time = best.departure_time
+                flight.arrival_time = best.arrival_time
+                flight.stop_airports = best.stop_airports
