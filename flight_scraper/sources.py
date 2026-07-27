@@ -1568,7 +1568,7 @@ class GoogleFlightsSource(BaseSource):
 
                     segments_raw = getattr(item, "flights", None)
                     segments = list(segments_raw) if segments_raw else []
-                    if not segments:
+                    if not segments or len(segments) == 0:
                         continue
 
                     first_seg = segments[0]
@@ -1584,10 +1584,16 @@ class GoogleFlightsSource(BaseSource):
 
                     dep_t = getattr(getattr(first_seg, "departure", None), "time", [0, 0])
                     arr_t = getattr(getattr(last_seg, "arrival", None), "time", [0, 0])
-                    dep_time = f"{dep_t[0]:02d}:{dep_t[1]:02d}" if len(dep_t) >= 2 else "00:00"
-                    arr_time = f"{arr_t[0]:02d}:{arr_t[1]:02d}" if len(arr_t) >= 2 else "00:00"
-
-                    flight_num = f"{carrier_code}{dep_t[0]}{dep_t[1]}"
+                    if len(dep_t) >= 2:
+                        dep_time = f"{dep_t[0]:02d}:{dep_t[1]:02d}"
+                        flight_num = f"{carrier_code}{dep_t[0]:02d}{dep_t[1]:02d}"
+                    else:
+                        dep_time = "00:00"
+                        flight_num = carrier_code or ""
+                    if len(arr_t) >= 2:
+                        arr_time = f"{arr_t[0]:02d}:{arr_t[1]:02d}"
+                    else:
+                        arr_time = "00:00"
 
                     duration = 0
                     for seg in segments:
@@ -1805,6 +1811,7 @@ class KayakScraper(BaseSource):
         try:
             from playwright.sync_api import sync_playwright
             import re
+            import time
 
             print(f"  [SCRAPE] {self.source_name}: Opening browser...")
 
@@ -1823,57 +1830,150 @@ class KayakScraper(BaseSource):
                 url = f"https://www.kayak.co.uk/flights/{origin}-{destination}/{date}"
                 print(f"  [SCRAPE] {self.source_name}: Navigating to {url}")
 
-                page.goto(url, timeout=30000, wait_until="domcontentloaded")
+                # Wait for initial DOM, then let JS render flight results
+                page.goto(url, timeout=45000, wait_until="domcontentloaded")
+                print(f"  [SCRAPE] {self.source_name}: Waiting for flight results to load...")
+
+                # Wait up to 20s for flight result cards to appear
+                try:
+                    page.wait_for_selector('[class*="result"]', timeout=20000)
+                    print(f"  [SCRAPE] {self.source_name}: Flight results detected")
+                except Exception:
+                    print(f"  [SCRAPE] {self.source_name}: No specific result selector, using time-based wait")
+
+                # Give extra time for all dynamic content to render
                 page.wait_for_timeout(8000)
 
-                # Try clicking "Load more" / "Show more" buttons to get additional results
-                for attempt in range(3):
+                # Accept cookie banner if present
+                try:
+                    accept_btn = page.query_selector('button:has-text("Accept all")')
+                    if accept_btn and accept_btn.is_visible():
+                        accept_btn.click()
+                        page.wait_for_timeout(2000)
+                        print(f"  [SCRAPE] {self.source_name}: Accepted cookies")
+                except Exception:
+                    pass
+
+                # Scroll down to trigger lazy loading of flight results
+                print(f"  [SCRAPE] {self.source_name}: Scrolling to load lazy content...")
+                for _ in range(5):
+                    page.evaluate("window.scrollBy(0, 800)")
+                    page.wait_for_timeout(1000)
+
+                # Click "Show more results" repeatedly to load all available results
+                max_clicks = 10
+                for attempt in range(max_clicks):
                     try:
-                        load_more = page.query_selector('[data-testid="show-more"]')
-                        if not load_more:
-                            load_more = page.query_selector('button:has-text("Show more")')
-                        if not load_more:
-                            load_more = page.query_selector('button:has-text("Load more")')
-                        if not load_more:
-                            load_more = page.query_selector('.moreButton')
+                        # Try multiple selectors for show-more button
+                        load_more = None
+                        for sel in [
+                            'button:has-text("Show more results")',
+                            'button:has-text("Show more")',
+                            'button:has-text("Show More")',
+                            'button:has-text("Load more")',
+                            '[data-testid="show-more"]',
+                            '[class*="showMore"]',
+                            '[class*="show-more"]',
+                            '[class*="more" i]',
+                            '.moreButton',
+                        ]:
+                            el = page.query_selector(sel)
+                            if el and el.is_visible():
+                                text = el.inner_text().strip()
+                                if "show" in text.lower() or "more" in text.lower() or "load" in text.lower():
+                                    load_more = el
+                                    break
+
                         if not load_more:
                             break
+
                         load_more.click()
                         page.wait_for_timeout(3000)
-                        print(f"  [SCRAPE] {self.source_name}: Clicked 'Load more' (attempt {attempt+1})")
+
+                        # Scroll after clicking to trigger new results
+                        page.evaluate("window.scrollBy(0, 500)")
+                        page.wait_for_timeout(1000)
+
+                        print(f"  [SCRAPE] {self.source_name}: Loaded more results (click {attempt+1})")
                     except Exception:
                         break
 
-                body_text = page.inner_text("body")
-                lines = body_text.split("\n")
+                # Extract structured flight data using JavaScript evaluation
+                flight_entries = page.evaluate("""
+                    () => {
+                        const results = [];
+                        // Find all price elements on the page
+                        const priceEls = document.querySelectorAll('[class*="price"], [class*="Price"]');
+                        const seen = new Set();
+                        priceEls.forEach(el => {
+                            const text = el.textContent.trim();
+                            const match = text.match(/[£€$]([\\d,]+)/);
+                            if (match) {
+                                const price = parseFloat(match[1].replace(/,/g, ''));
+                                if (price > 0 && price < 5000) {
+                                    // Find nearby text for context
+                                    const parent = el.closest('[class*="result"], [class*="Result"], [class*="card"], [class*="Card"]') || el.parentElement;
+                                    const context = parent ? parent.textContent : '';
+                                    results.push({ price, context });
+                                }
+                            }
+                        });
+                        return results;
+                    }
+                """)
 
-                # Extract GBP prices from page
-                price_data = []
-                for line in lines:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    price_match = re.search(r'[£€\$]([\d,]+)', line)
-                    if price_match:
-                        try:
-                            price_val = float(price_match.group(1).replace(",", ""))
-                            price_data.append({"price_gbp": price_val, "raw": line[:200]})
-                        except ValueError:
-                            pass
+                # If JS evaluation didn't work well, fall back to text extraction
+                if not flight_entries or len(flight_entries) < 5:
+                    body_text = page.inner_text("body")
+                    lines = body_text.split("\n")
+                    flight_entries = []
+                    for i, line in enumerate(lines):
+                        line = line.strip()
+                        if not line:
+                            continue
+                        price_match = re.search(r'[£€$]([\d,]+)', line)
+                        if price_match:
+                            try:
+                                price_val = float(price_match.group(1).replace(",", ""))
+                                # Get surrounding context (5 lines before and after)
+                                start = max(0, i - 5)
+                                end = min(len(lines), i + 6)
+                                context = " ".join(lines[start:end])
+                                flight_entries.append({"price": price_val, "context": context[:500]})
+                            except ValueError:
+                                pass
 
                 browser.close()
 
-            # Deduplicate by rounding price to nearest integer (handles minor variations)
+            # Build results from extracted entries
             results = []
             seen_keys = set()
-            for pd in price_data:
-                price_gbp = pd["price_gbp"]
+            for entry in flight_entries:
+                price_gbp = entry["price"]
                 if price_gbp <= 0 or price_gbp > 5000:
                     continue
                 dedup_key = round(price_gbp)
                 if dedup_key in seen_keys:
                     continue
                 seen_keys.add(dedup_key)
+
+                # Try to parse airline and stops from context
+                context = entry.get("context", "")
+                airline_match = re.search(r'(Lufthansa|British Airways|Ryanair|KLM|Air France|Eurowings|Swiss|SWISS|Scandinavian|Aer Lingus|Trip\.com|Multiple airlines|Vueling|Wizz Air|Jet2|easyJet|Emirates|Qatar Airways|Turkish Airlines|Aegean|Finnair|Iberia|SAS|Brussels Airlines|TAP Air Portugal|LOT|Air Baltic)', context)
+                airline = airline_match.group(1) if airline_match else "Kayak (multiple airlines)"
+
+                stops_match = re.search(r'(direct|non.?stop|0 stop|\b1 stop\b|\b2 stop\b|\b\d+\+ stop)', context)
+                stops = 0
+                if stops_match:
+                    st = stops_match.group(1)
+                    if "1 stop" in st:
+                        stops = 1
+                    elif "2 stop" in st or "2+" in st:
+                        stops = 2
+
+                times_match = re.findall(r'(\d{2}:\d{2})\s*[–\-—]\s*(\d{2}:\d{2})', context)
+                dep_time = times_match[0][0] if times_match else ""
+                arr_time = times_match[0][1] if times_match else ""
 
                 converted_price, used_rate = currency_converter.convert(price_gbp, "GBP")
                 dep_tz_info = get_airport_timezone(origin)
@@ -1883,13 +1983,13 @@ class KayakScraper(BaseSource):
                     source_name=self.source_name,
                     origin=origin,
                     destination=destination,
-                    departure_time="",
-                    arrival_time="",
+                    departure_time=dep_time,
+                    arrival_time=arr_time,
                     departure_timezone=dep_tz_info[0],
                     arrival_timezone=arr_tz_info[0],
-                    airline="Kayak (multiple airlines)",
+                    airline=airline,
                     flight_number="",
-                    stops=0,
+                    stops=stops,
                     stop_airports="",
                     cabin_class=cabin_class,
                     cabin_class_original=cabin_class.replace("_", " ").title(),
@@ -1907,9 +2007,9 @@ class KayakScraper(BaseSource):
                 )
                 results.append(flight)
 
-            print(f"  [SCRAPE] {self.source_name}: Extracted {len(results)} prices from page")
+            print(f"  [SCRAPE] {self.source_name}: Extracted {len(results)} unique prices from page")
             if results:
-                return results[:15]
+                return results[:100]
 
             print(f"  [INFO] {self.source_name}: Kayak data not extractable")
             return []
