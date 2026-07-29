@@ -1840,11 +1840,12 @@ class KayakScraper(BaseSource):
                 # Load the page and let JS render flight results
                 page.goto(url, timeout=30000, wait_until="domcontentloaded")
                 # Give page time to render dynamic flight results
+                # (Railway is slower than local — use generous timeouts)
                 try:
-                    page.wait_for_selector('[class*="result"]', timeout=6000)
+                    page.wait_for_selector('[class*="result"]', timeout=12000)
                 except Exception:
                     pass
-                page.wait_for_timeout(5000)
+                page.wait_for_timeout(7000)
 
                 # Accept cookie banner if present
                 try:
@@ -1856,10 +1857,10 @@ class KayakScraper(BaseSource):
                     pass
 
                 # Click "Show more results" to load additional prices
-                for attempt in range(2):
+                for attempt in range(3):
                     try:
                         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                        page.wait_for_timeout(800)
+                        page.wait_for_timeout(1000)
                         load_more = None
                         for sel in [
                             'button:has-text("Show more results")',
@@ -1875,7 +1876,7 @@ class KayakScraper(BaseSource):
                         if not load_more:
                             break
                         load_more.click()
-                        page.wait_for_timeout(1500)
+                        page.wait_for_timeout(2500)
                         print(f"  [SCRAPE] {self.source_name}: Loaded more results (click {attempt+1})")
                     except Exception:
                         break
@@ -2000,7 +2001,9 @@ class KayakScraper(BaseSource):
             print(f"  [ERROR] {self.source_name}: playwright not installed")
             return []
         except Exception as e:
+            import traceback
             print(f"  [ERROR] {self.source_name}: {e}")
+            traceback.print_exc()
             return []
 
 
