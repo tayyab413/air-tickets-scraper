@@ -2344,13 +2344,19 @@ class WhentoFlySource(BaseSource):
             )
 
             print(f"  [API] {self.source_name}: Fetching prices...")
+            import time as _time
+
             response = requests.get(url, timeout=20)
 
-            # Retry once on transient server errors (HTTP 5xx, including Cloudflare 530)
-            if response.status_code >= 500:
-                print(f"  [RETRY] {self.source_name}: HTTP {response.status_code}, retrying once...")
-                import time as _time
-                _time.sleep(2)
+            # Exponential backoff on server errors (Cloudflare tunnel down, etc.)
+            max_retries = 3
+            retry_delay = 2
+            for attempt in range(max_retries):
+                if response.status_code < 500:
+                    break
+                print(f"  [RETRY] {self.source_name}: HTTP {response.status_code}, retry {attempt+1}/{max_retries} in {retry_delay}s")
+                _time.sleep(retry_delay)
+                retry_delay *= 2
                 response = requests.get(url, timeout=20)
 
             if response.status_code != 200:
