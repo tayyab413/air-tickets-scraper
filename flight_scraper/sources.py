@@ -1070,6 +1070,7 @@ class IgnavSource(BaseSource):
                 return []
 
             results = []
+            ignav_ids = []
 
             for itin in itineraries:
                 try:
@@ -1120,26 +1121,8 @@ class IgnavSource(BaseSource):
                         print(f"  [DEBUG] Ignav: Skipping non-economy itinerary ({itin_cabin})")
                         continue
 
-                    # Booking link: call Ignav booking-links API to get real URLs
-                    ignav_id = itin.get("ignav_id", "")
-                    ticket_link = ""
-                    if ignav_id:
-                        try:
-                            bl_response = requests.post(
-                                "https://ignav.com/api/fares/booking-links",
-                                json={"ignav_id": ignav_id},
-                                headers=headers,
-                                timeout=10,
-                            )
-                            if bl_response.status_code == 200:
-                                bl_data = bl_response.json()
-                                opts = bl_data.get("booking_options", [])
-                                if opts:
-                                    links = opts[0].get("links", [])
-                                    if links:
-                                        ticket_link = links[0].get("url", "")
-                        except Exception:
-                            pass
+                    # Store ignav_id for later booking-link fetch
+                    ignav_ids.append((len(results), itin.get("ignav_id", "")))
 
                     dep_tz_info = get_airport_timezone(origin)
                     arr_tz_info = get_airport_timezone(destination)
@@ -1163,7 +1146,7 @@ class IgnavSource(BaseSource):
                         base_currency=cfg.BASE_CURRENCY,
                         exchange_rate_used=used_rate,
                         converted_price_base=converted_price,
-                        ticket_link=ticket_link,
+                        ticket_link="",
                         baggage_info="Check airline",
                         fare_rules=itin.get("price", {}).get("status", "Standard fare"),
                         search_time="",
@@ -1174,6 +1157,30 @@ class IgnavSource(BaseSource):
                 except Exception as e:
                     print(f"  [WARNING] {self.source_name}: Parse error: {e}")
                     continue
+
+            # Fetch booking links for cheapest 5 itineraries (second pass to minimize API calls)
+            results.sort(key=lambda f: f.converted_price_base)
+            fetched = 0
+            for idx, ignav_id in ignav_ids:
+                if not ignav_id or fetched >= 5:
+                    continue
+                try:
+                    bl_response = requests.post(
+                        "https://ignav.com/api/fares/booking-links",
+                        json={"ignav_id": ignav_id},
+                        headers=headers,
+                        timeout=8,
+                    )
+                    if bl_response.status_code == 200:
+                        bl_data = bl_response.json()
+                        opts = bl_data.get("booking_options", [])
+                        if opts:
+                            links = opts[0].get("links", [])
+                            if links:
+                                results[idx].ticket_link = links[0].get("url", "")
+                                fetched += 1
+                except Exception:
+                    pass
 
             print(f"  [OK] {self.source_name}: Found {len(results)} flights")
             return results
@@ -1830,70 +1837,45 @@ class KayakScraper(BaseSource):
                 url = f"https://www.kayak.co.uk/flights/{origin}-{destination}/{date}"
                 print(f"  [SCRAPE] {self.source_name}: Navigating to {url}")
 
-                # Wait for initial DOM, then let JS render flight results
-                page.goto(url, timeout=45000, wait_until="domcontentloaded")
-                print(f"  [SCRAPE] {self.source_name}: Waiting for flight results to load...")
-
-                # Wait up to 20s for flight result cards to appear
+                # Load the page and let JS render flight results
+                page.goto(url, timeout=30000, wait_until="domcontentloaded")
+                # Give page time to render dynamic flight results
                 try:
-                    page.wait_for_selector('[class*="result"]', timeout=20000)
-                    print(f"  [SCRAPE] {self.source_name}: Flight results detected")
+                    page.wait_for_selector('[class*="result"]', timeout=6000)
                 except Exception:
-                    print(f"  [SCRAPE] {self.source_name}: No specific result selector, using time-based wait")
-
-                # Give extra time for all dynamic content to render
-                page.wait_for_timeout(8000)
+                    pass
+                page.wait_for_timeout(5000)
 
                 # Accept cookie banner if present
                 try:
                     accept_btn = page.query_selector('button:has-text("Accept all")')
                     if accept_btn and accept_btn.is_visible():
                         accept_btn.click()
-                        page.wait_for_timeout(2000)
-                        print(f"  [SCRAPE] {self.source_name}: Accepted cookies")
+                        page.wait_for_timeout(1000)
                 except Exception:
                     pass
 
-                # Scroll down to trigger lazy loading of flight results
-                print(f"  [SCRAPE] {self.source_name}: Scrolling to load lazy content...")
-                for _ in range(5):
-                    page.evaluate("window.scrollBy(0, 800)")
-                    page.wait_for_timeout(1000)
-
-                # Click "Show more results" repeatedly to load all available results
-                max_clicks = 10
-                for attempt in range(max_clicks):
+                # Click "Show more results" to load additional prices
+                for attempt in range(2):
                     try:
-                        # Try multiple selectors for show-more button
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        page.wait_for_timeout(800)
                         load_more = None
                         for sel in [
                             'button:has-text("Show more results")',
                             'button:has-text("Show more")',
-                            'button:has-text("Show More")',
-                            'button:has-text("Load more")',
-                            '[data-testid="show-more"]',
-                            '[class*="showMore"]',
-                            '[class*="show-more"]',
                             '[class*="more" i]',
-                            '.moreButton',
                         ]:
                             el = page.query_selector(sel)
                             if el and el.is_visible():
                                 text = el.inner_text().strip()
-                                if "show" in text.lower() or "more" in text.lower() or "load" in text.lower():
+                                if "show" in text.lower() or "more" in text.lower():
                                     load_more = el
                                     break
-
                         if not load_more:
                             break
-
                         load_more.click()
-                        page.wait_for_timeout(3000)
-
-                        # Scroll after clicking to trigger new results
-                        page.evaluate("window.scrollBy(0, 500)")
-                        page.wait_for_timeout(1000)
-
+                        page.wait_for_timeout(1500)
                         print(f"  [SCRAPE] {self.source_name}: Loaded more results (click {attempt+1})")
                     except Exception:
                         break
@@ -2363,6 +2345,13 @@ class WhentoFlySource(BaseSource):
 
             print(f"  [API] {self.source_name}: Fetching prices...")
             response = requests.get(url, timeout=20)
+
+            # Retry once on transient server errors (HTTP 5xx, including Cloudflare 530)
+            if response.status_code >= 500:
+                print(f"  [RETRY] {self.source_name}: HTTP {response.status_code}, retrying once...")
+                import time as _time
+                _time.sleep(2)
+                response = requests.get(url, timeout=20)
 
             if response.status_code != 200:
                 print(f"  [ERROR] {self.source_name}: HTTP {response.status_code}")
