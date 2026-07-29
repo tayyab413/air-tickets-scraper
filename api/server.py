@@ -228,7 +228,7 @@ def run_search(req: SearchRequest):
             cmd,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=300,
             cwd=str(SCRAPER_DIR),
             env={**os.environ, "PYTHONPATH": str(SCRAPER_DIR)},
         )
