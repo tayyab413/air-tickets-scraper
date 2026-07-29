@@ -8,3 +8,6 @@ flight_scraper/output/*.tmp
 dist/
 build/
 SYSTEM_BREAKDOWN.md
+*.docx
+~$*
+
